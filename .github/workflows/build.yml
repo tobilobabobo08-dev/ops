@@ -21,9 +21,9 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    defaults:
-      run:
-        working-directory: dockerts/backend
+   defaults:
+  run:
+    working-directory: ../dockerts/backend
 
     services:
       postgres:
