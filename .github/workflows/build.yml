@@ -11,15 +11,43 @@ concurrency:
   group: build-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  PYTHON_VERSION: "3.12"
+  NODE_VERSION: "22"
+
 jobs:
   backend:
-    name: Backend (Lint & Test)
+    name: Backend (lint, types, tests)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     defaults:
       run:
         working-directory: dockerts/backend
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: biodata
+          POSTGRES_PASSWORD: biodata
+          POSTGRES_DB: biodata_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U biodata -d biodata_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+    env:
+      TEST_DATABASE_URL: postgresql+psycopg://biodata:biodata@localhost:5432/biodata_test
+      DATABASE_URL: postgresql+psycopg://biodata:biodata@localhost:5432/biodata_test
+      CORS_ORIGINS: http://localhost:3000
+      LOG_LEVEL: INFO
+
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Install uv
@@ -29,38 +57,41 @@ jobs:
           enable-cache: true
           cache-dependency-glob: dockerts/backend/uv.lock
 
-      - name: Set up Python 3.12
-        run: uv python install 3.12
+      - name: Set up Python
+        run: uv python install ${{ env.PYTHON_VERSION }}
 
       - name: Install dependencies
         run: uv sync --frozen
 
-      - name: Lint check (Ruff)
+      - name: Ruff (lint)
         run: uv run ruff check .
 
-      - name: Format check (Ruff)
+      - name: Ruff (format check)
         run: uv run ruff format --check .
 
-      - name: Type check (Mypy)
+      - name: Mypy
         run: uv run mypy src
 
-      - name: Run unit tests (Pytest)
+      - name: Pytest
         run: uv run pytest -q
 
   frontend:
-    name: Frontend (Lint & Build)
+    name: Frontend (lint, types, build, tests)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     defaults:
       run:
         working-directory: dockerts/frontend
+
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
+      - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: ${{ env.NODE_VERSION }}
           cache: npm
           cache-dependency-path: dockerts/frontend/package-lock.json
 
@@ -82,60 +113,61 @@ jobs:
         run: npm test
 
   docker-compose:
-    name: Docker Compose (Build & Smoke Test)
+    name: Docker Compose (build & smoke test)
     runs-on: ubuntu-latest
     needs: [backend, frontend]
+    permissions:
+      contents: read
     defaults:
       run:
         working-directory: dockerts
+
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
+      - name: Set up Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Start stack with Docker Compose
+      - name: Start the stack
         run: docker compose up -d --build
 
-      - name: Wait for backend health
+      - name: Wait for backend /health
         run: |
           for i in $(seq 1 60); do
             if curl -fsS http://localhost:8000/health | grep -q '"status":"ok"'; then
-              echo "Backend is healthy!"
-              exit 0
+              echo "backend healthy"; exit 0
             fi
             sleep 2
           done
-          echo "Backend failed to report healthy status in time" >&2
+          echo "backend did not become healthy in time" >&2
           exit 1
 
-      - name: Wait for frontend health
+      - name: Wait for frontend
         run: |
           for i in $(seq 1 60); do
             if curl -fsS -o /dev/null http://localhost:3000; then
-              echo "Frontend is healthy!"
-              exit 0
+              echo "frontend healthy"; exit 0
             fi
             sleep 2
           done
-          echo "Frontend failed to respond in time" >&2
+          echo "frontend did not become healthy in time" >&2
           exit 1
 
-      - name: Run API idempotency smoke test
+      - name: Idempotent replay check (POST twice, same Idempotency-Key)
         run: |
           set -euo pipefail
-          KEY="ci-test-$(date +%s)-$RANDOM"
+          KEY="ci-smoke-$(date +%s)-$RANDOM"
           BODY='{
-            "full_name": "Test User",
-            "email": "test@example.com",
-            "phone": "+1234567890",
-            "date_of_birth": "1995-01-01",
-            "sex": "male",
-            "height_cm": 175.0,
-            "weight_kg": 70.0,
-            "blood_type": "A+",
-            "country": "US"
+            "full_name": "Ada Lovelace",
+            "email": "ada@example.com",
+            "phone": "+2348012345678",
+            "date_of_birth": "1990-05-02",
+            "sex": "female",
+            "height_cm": 170.0,
+            "weight_kg": 62.5,
+            "blood_type": "O+",
+            "country": "NG"
           }'
 
           post() {
@@ -149,33 +181,34 @@ jobs:
           CODE1=$(post /tmp/r1.json)
           CODE2=$(post /tmp/r2.json)
 
-          echo "First POST status:  $CODE1"
-          echo "Second POST status: $CODE2"
+          echo "first:  $CODE1 $(cat /tmp/r1.json)"
+          echo "second: $CODE2 $(cat /tmp/r2.json)"
 
           if [ "$CODE1" != "201" ]; then
-            echo "FAIL: Expected 201 on first POST, got $CODE1" >&2
-            cat /tmp/r1.json
-            exit 1
+            echo "FAIL: first POST expected 201, got $CODE1" >&2; exit 1
           fi
-
           if [ "$CODE2" != "200" ]; then
-            echo "FAIL: Expected 200 on replay POST, got $CODE2" >&2
-            cat /tmp/r2.json
-            exit 1
+            echo "FAIL: replayed POST expected 200, got $CODE2" >&2; exit 1
           fi
 
           ID1=$(jq -r '.id' /tmp/r1.json)
           ID2=$(jq -r '.id' /tmp/r2.json)
+          if [ -z "$ID1" ] || [ "$ID1" = "null" ]; then
+            echo "FAIL: first response had no id" >&2; exit 1
+          fi
           if [ "$ID1" != "$ID2" ]; then
-            echo "FAIL: Replay returned different ID ($ID1 != $ID2)" >&2
+            echo "FAIL: replay returned a different id ($ID1 != $ID2) — write is not replay-safe" >&2
             exit 1
           fi
-          echo "SUCCESS: Docker Compose stack up and API idempotency test passed!"
+          echo "OK: replay returned the same record ($ID1)"
 
-      - name: Dump Docker logs on failure
+      - name: Frontend proxy reachable
+        run: curl -fsS -o /dev/null "http://localhost:3000/api/bio-records?limit=1"
+
+      - name: Dump logs on failure
         if: failure()
         run: docker compose logs --no-color --tail=400
 
-      - name: Tear down Docker stack
+      - name: Tear down
         if: always()
         run: docker compose down -v --remove-orphans
