@@ -108,18 +108,12 @@ def get_record(session: Session, record_id: uuid.UUID) -> BioRecord:
     return record
 
 
-from biodata.models import BioRecord, NamePhoneCollection, RequestResponseLog
-from biodata.schemas import BioRecordCreate, NamePhoneCreate, RequestResponseCreate
-
-
 def list_records(session: Session, limit: int, offset: int) -> tuple[list[BioRecord], int]:
     """Return a page of records plus the total row count."""
     return repository.list_records(session, limit=limit, offset=offset)
 
 
-def create_name_phone(
-    session: Session, payload: NamePhoneCreate
-) -> NamePhoneCollection:
+def create_name_phone(session: Session, payload: NamePhoneCreate) -> NamePhoneCollection:
     """Create a new name and phone number record."""
     return repository.create_name_phone(
         session, name=payload.name, phone_number=payload.phone_number
@@ -133,9 +127,7 @@ def list_name_phone(
     return repository.list_name_phone(session, limit=limit, offset=offset)
 
 
-def log_request_response(
-    session: Session, payload: RequestResponseCreate
-) -> RequestResponseLog:
+def log_request_response(session: Session, payload: RequestResponseCreate) -> RequestResponseLog:
     """Save a request-response log entry."""
     return repository.create_request_response_log(
         session,

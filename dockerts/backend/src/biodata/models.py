@@ -7,6 +7,7 @@ import uuid
 from decimal import Decimal
 
 from sqlalchemy import (
+    UUID,
     CheckConstraint,
     Date,
     DateTime,
@@ -15,7 +16,6 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
-    UUID,
     func,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -63,9 +63,7 @@ class BioRecord(Base):
         ),
     )
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     idempotency_key: Mapped[str] = mapped_column(Text, nullable=False)
     request_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     full_name: Mapped[str] = mapped_column(Text, nullable=False)
@@ -82,13 +80,13 @@ class BioRecord(Base):
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
-        default=lambda: dt.datetime.now(dt.timezone.utc),
+        default=lambda: dt.datetime.now(dt.UTC),
         server_default=func.now(),
     )
     updated_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
-        default=lambda: dt.datetime.now(dt.timezone.utc),
+        default=lambda: dt.datetime.now(dt.UTC),
         server_default=func.now(),
     )
 
@@ -98,15 +96,13 @@ class NamePhoneCollection(Base):
 
     __tablename__ = "name_phone_collections"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(Text, nullable=False)
     phone_number: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
-        default=lambda: dt.datetime.now(dt.timezone.utc),
+        default=lambda: dt.datetime.now(dt.UTC),
         server_default=func.now(),
     )
 
@@ -116,9 +112,7 @@ class RequestResponseLog(Base):
 
     __tablename__ = "request_responses"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     method: Mapped[str] = mapped_column(String(10), nullable=False)
     path: Mapped[str] = mapped_column(Text, nullable=False)
     status_code: Mapped[int] = mapped_column(nullable=False)
@@ -127,6 +121,6 @@ class RequestResponseLog(Base):
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
-        default=lambda: dt.datetime.now(dt.timezone.utc),
+        default=lambda: dt.datetime.now(dt.UTC),
         server_default=func.now(),
     )

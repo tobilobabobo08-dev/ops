@@ -89,7 +89,9 @@ def clean_tables(_database: None) -> Iterator[None]:
             connection.execute(text("DELETE FROM name_phone_collections"))
             connection.execute(text("DELETE FROM request_responses"))
         else:
-            connection.execute(text("TRUNCATE TABLE bio_records, name_phone_collections, request_responses"))
+            connection.execute(
+                text("TRUNCATE TABLE bio_records, name_phone_collections, request_responses")
+            )
     yield
 
 

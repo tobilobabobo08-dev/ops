@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Any
+from contextlib import suppress
+from typing import Annotated, Any, cast
 
 from fastapi import Depends, FastAPI, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-
-from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
+from starlette.responses import StreamingResponse
 
 from biodata import service
 from biodata.api.routes import router as api_router
@@ -25,7 +26,7 @@ API_PREFIX = "/api/v1"
 class RequestResponseLoggingMiddleware(BaseHTTPMiddleware):
     """Middleware that intercepts requests and responses, writing them to SQLite database."""
 
-    async def dispatch(self, request: Request, call_next) -> Response:
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         path = request.url.path
         if path in ("/health", "/docs", "/openapi.json", "/redoc"):
             return await call_next(request)
@@ -33,11 +34,11 @@ class RequestResponseLoggingMiddleware(BaseHTTPMiddleware):
         req_body_bytes = await request.body()
         req_body_str = req_body_bytes.decode("utf-8", errors="replace") if req_body_bytes else None
 
-        response = await call_next(request)
+        response = cast(StreamingResponse, await call_next(request))
 
         resp_body_bytes = b""
         async for chunk in response.body_iterator:
-            resp_body_bytes += chunk
+            resp_body_bytes += chunk.encode() if isinstance(chunk, str) else bytes(chunk)
 
         new_response = Response(
             content=resp_body_bytes,
@@ -46,7 +47,9 @@ class RequestResponseLoggingMiddleware(BaseHTTPMiddleware):
             media_type=response.media_type,
         )
 
-        resp_body_str = resp_body_bytes.decode("utf-8", errors="replace") if resp_body_bytes else None
+        resp_body_str = (
+            resp_body_bytes.decode("utf-8", errors="replace") if resp_body_bytes else None
+        )
 
         if path != f"{API_PREFIX}/request-responses":
             try:
@@ -72,10 +75,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or get_settings()
     configure_logging(settings.log_level)
 
-    try:
+    with suppress(Exception):
         Base.metadata.create_all(bind=get_engine())
-    except Exception:
-        pass
 
     app = FastAPI(
         title="biodata",
