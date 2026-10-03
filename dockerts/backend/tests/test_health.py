@@ -23,8 +23,10 @@ def _fake_session() -> Iterator[Any]:
         (False, 503, {"status": "error", "database": "error"}),
     ],
 )
+@pytest.mark.parametrize("path", ["/health", "/healthz"])
 async def test_health_reflects_database_ping(
     monkeypatch: pytest.MonkeyPatch,
+    path: str,
     healthy: bool,
     expected_status: int,
     expected_body: dict[str, str],
@@ -35,7 +37,7 @@ async def test_health_reflects_database_ping(
 
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
-        response = await client.get("/health")
+        response = await client.get(path)
 
     assert response.status_code == expected_status
     assert response.json() == expected_body

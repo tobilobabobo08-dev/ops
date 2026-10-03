@@ -14,7 +14,7 @@ src/biodata/
   repository.py   data access (INSERT ... ON CONFLICT DO NOTHING)
   service.py      business logic, idempotency handling
   api/routes.py   HTTP routes mounted at /api/v1
-  main.py         app factory, CORS, /health
+  main.py         app factory, CORS, /healthz (with /health alias)
   __main__.py     uvicorn entrypoint
 alembic/          migrations
 tests/            pytest suite
@@ -35,6 +35,9 @@ uv sync
 uv run alembic upgrade head
 uv run python -m biodata          # serves on 0.0.0.0:8000
 ```
+
+Check backend and database health with `curl http://localhost:8000/healthz`.
+The former `/health` path remains available as an alias.
 
 ## Idempotency
 

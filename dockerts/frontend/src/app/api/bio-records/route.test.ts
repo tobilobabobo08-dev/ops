@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { GET, POST } from "@/app/api/bio-records/route";
+import { GET as healthGet } from "@/app/healthz/route";
 
 const KEY = "3f7c1a2e-9b1d-4c8a-8f2e-5a6b7c8d9e0f";
 
@@ -160,5 +161,34 @@ describe("GET /api/bio-records", () => {
     );
 
     expect(response.status).toBe(502);
+  });
+});
+
+describe("GET /healthz", () => {
+  it("proxies the backend health response", async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse(200, { status: "ok", database: "ok" }),
+    );
+
+    const response = await healthGet();
+
+    expect(lastCall().url).toBe("http://backend:8000/healthz");
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      status: "ok",
+      database: "ok",
+    });
+  });
+
+  it("returns 503 when the backend cannot be reached", async () => {
+    fetchMock.mockRejectedValue(new Error("ECONNREFUSED"));
+
+    const response = await healthGet();
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({
+      status: "error",
+      backend: "error",
+    });
   });
 });
