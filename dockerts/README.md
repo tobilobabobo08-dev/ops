@@ -48,7 +48,7 @@ flowchart LR
 ```
 
 Startup order is enforced by compose: `db` must pass its `pg_isready`
-healthcheck before `backend` starts, and `backend` must pass `/health` before
+healthcheck before `backend` starts, and `backend` must pass `/healthz` before
 `frontend` starts.
 
 ---
@@ -67,7 +67,7 @@ Then:
 | what              | where                                   |
 |-------------------|-----------------------------------------|
 | UI                | http://localhost:3000                   |
-| API health        | http://localhost:8000/health            |
+| API health        | http://localhost:8000/healthz           |
 | API records       | http://localhost:8000/api/v1/bio-records|
 | Postgres          | `localhost:5433` (user/pass `biodata`)  |
 
@@ -149,11 +149,12 @@ and falls back to the defaults shown below.
 
 ## HTTP API
 
-Backend, prefix `/api/v1` (health is bare `/health`):
+Backend, prefix `/api/v1` (health is bare `/healthz`; `/health` remains an alias):
 
 | method | path                       | notes |
 |--------|----------------------------|-------|
-| GET    | `/health`                  | `200 {"status":"ok","database":"ok"}`; `503` with `"database":"error"` if the DB ping fails |
+| GET    | `/healthz`                 | `200 {"status":"ok","database":"ok"}`; `503` with `"database":"error"` if the DB ping fails |
+| GET    | `/health`                  | Backward-compatible alias for `/healthz` |
 | POST   | `/api/v1/bio-records`      | requires `Idempotency-Key` header (8..128 chars). `201` created · `200` replay of an identical body · `409` same key with a *different* body · `422` validation error |
 | GET    | `/api/v1/bio-records`      | `?limit=` (1..100, default 20) `&offset=` (>= 0, default 0) → `{"items":[…],"total":int,"limit":int,"offset":int}`, ordered `created_at DESC` |
 | GET    | `/api/v1/bio-records/{id}` | `200` record · `404` unknown id |
@@ -218,7 +219,7 @@ payload twice with one key against the real stack and fails unless the first is
 | `backend`       | `postgres:16` service container (health-gated), `TEST_DATABASE_URL` set, uv installed via `astral-sh/setup-uv` with caching, then `uv sync --frozen` → `ruff check` → `ruff format --check` → `mypy src` → `pytest -q` |
 | `frontend`      | `actions/setup-node@v4`, Node 22, npm cache, then `npm ci` → `npm run lint` → `npm run typecheck` → `npm run build` → `npm test` |
 | `docker`        | builds **both** images with buildx / `docker/build-push-action` using GitHub Actions layer cache. **Build only — nothing is pushed.** |
-| `compose-smoke` | needs the three above; `docker compose up -d --build`, waits for `/health` and the frontend to answer, runs the idempotent-replay assertion, dumps `docker compose logs` on failure, and `docker compose down -v` always |
+| `compose-smoke` | needs the three above; `docker compose up -d --build`, waits for `/healthz` on backend and frontend, runs the idempotent-replay assertion, dumps `docker compose logs` on failure, and `docker compose down -v` always |
 
 `.github/dependabot.yml` keeps uv, npm, Docker base images and GitHub Actions
 up to date on a weekly cadence.

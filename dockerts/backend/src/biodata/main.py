@@ -28,7 +28,7 @@ class RequestResponseLoggingMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         path = request.url.path
-        if path in ("/health", "/docs", "/openapi.json", "/redoc"):
+        if path in ("/health", "/healthz", "/docs", "/openapi.json", "/redoc"):
             return await call_next(request)
 
         req_body_bytes = await request.body()
@@ -93,7 +93,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.add_middleware(RequestResponseLoggingMiddleware)
 
-    @app.get("/health", tags=["ops"])
+    @app.get("/healthz", tags=["ops"])
+    @app.get("/health", tags=["ops"], include_in_schema=False)
     def health(
         response: Response,
         session: Annotated[Session, Depends(get_session)],

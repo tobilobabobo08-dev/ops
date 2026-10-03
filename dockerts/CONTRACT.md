@@ -60,8 +60,9 @@ Derived, computed on read (never stored): `age` (int), `bmi` (float, 1 dp).
 
 ## HTTP API (backend, prefix `/api/v1`)
 
-### `GET /health`  (no prefix — bare `/health`)
+### `GET /healthz`  (no prefix — bare `/healthz`)
 `200 {"status":"ok","database":"ok"}` — returns 503 with `"database":"error"` if the DB ping fails.
+`GET /health` remains available as a backward-compatible alias. The frontend also exposes `/healthz`, proxying this backend check.
 
 ### `POST /api/v1/bio-records`
 Header: `Idempotency-Key: <string 8..128>` — **required**.
